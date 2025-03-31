@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import formidable from 'formidable';
+import formidable, { IncomingForm } from 'formidable';
+import type { File } from 'formidable';
 import fs from 'fs';
 import FormData from 'form-data';
 import axios from 'axios';
@@ -10,6 +11,12 @@ export const config = {
   },
 };
 
+interface ExtendedFile extends File {
+  filepath: string;
+  mimetype?: string;
+  originalFilename?: string;
+}
+
 // Replace with your actual n8n Webhook URL
 const N8N_WEBHOOK_URL = "https://YOUR-N8N-INSTANCE/webhook/image-upload";
 
@@ -18,21 +25,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const form = new formidable.IncomingForm({ keepExtensions: true });
 
-  form.parse(req, async (err, fields, files) => {
+  form.parse(req, async (err: any, fields: { [key: string]: string }, files: { [key: string]: File }) => {
+
+
     if (err) {
       console.error("Error parsing form:", err);
       return res.status(500).json({ error: "Upload failed" });
     }
 
     const style = fields.style as string;
-    const image = files.image as formidable.File;
+    const image = files.image as File;
+
 
     try {
       const formData = new FormData();
+      const extendedImage = image as ExtendedFile;
+
       formData.append('style', style);
-      formData.append('image', fs.createReadStream(image.filepath), {
-        filename: image.originalFilename || 'upload.jpg',
-        contentType: image.mimetype || 'image/jpeg',
+      formData.append('image', fs.createReadStream(extendedImage.filepath), {
+        filename: extendedImage.originalFilename || 'upload.jpg',
+        contentType: extendedImage.mimetype || 'image/jpeg',
       });
 
       const n8nRes = await axios.post(N8N_WEBHOOK_URL, formData, {
